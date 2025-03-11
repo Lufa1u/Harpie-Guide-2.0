@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -18,7 +18,7 @@ class User(Base):
     email = Column(String, nullable=False, unique=True)
     wallet = Column(String, nullable=True)
     private_key = Column(String, nullable=False, unique=True)
-    cookie = Column(String, nullable=True)
+    cookie = Column(JSON, nullable=True)
     points = Column(Integer, default=0)
 
 
