@@ -18,7 +18,7 @@ def generate_basic_header():
 
     headers = {
         "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": f'"{platform}"',
+        "sec-ch-ua-platform": f"{platform}",
         "sec-fetch-dest": "empty",
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-origin",
