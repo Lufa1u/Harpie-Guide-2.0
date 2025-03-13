@@ -20,6 +20,7 @@ class User(Base):
     private_key = Column(String, nullable=False, unique=True)
     cookie = Column(JSON, nullable=True)
     points = Column(Integer, default=0)
+    transactions_count = Column(Integer, default=0)
 
 
 
