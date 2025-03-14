@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+
+from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
 
@@ -54,7 +54,7 @@ async def add_users_from_files(data_folder="data"):
     for i in range(num_records):
         new_user = User(
             username=data["username"][i],
-            proxy=data["proxy"][i],
+            proxy=data["proxy"][i] if data["proxy"] else None,
             email=data["email"][i],
             wallet=data["wallet"][i],
             private_key=data["private_key"][i],

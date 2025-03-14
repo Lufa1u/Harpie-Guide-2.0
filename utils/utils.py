@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 
 def generate_basic_header():
-    with open("./user_agents.txt", "r", encoding="utf-8") as file:
+    with open("./utils/user_agents.txt", "r", encoding="utf-8") as file:
         user_agents = file.read().splitlines()
 
     user_agent = random.choice(user_agents)
@@ -16,7 +16,7 @@ def generate_basic_header():
     else:
         platform = "Other"
 
-    headers = {
+    return {
         "sec-ch-ua-mobile": "?0",
         "sec-ch-ua-platform": f"{platform}",
         "sec-fetch-dest": "empty",
@@ -24,8 +24,6 @@ def generate_basic_header():
         "sec-fetch-site": "same-origin",
         "user-agent": user_agent
     }
-
-    return json.dumps(headers, indent=4)
 
 
 

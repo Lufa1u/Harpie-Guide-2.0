@@ -1,8 +1,12 @@
+import asyncio
 import json
 import os
 import random
+import time
 
 import aiohttp
+from eth_account.datastructures import SignedTransaction
+from eth_account.messages import encode_defunct
 from web3 import AsyncWeb3, AsyncHTTPProvider, Web3
 
 from database import User, session as db_session
@@ -29,7 +33,8 @@ class Project:
 
     async def init_session(self) -> None:
         session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar())
-        session.cookie_jar.update_cookies(self.user.cookie)
+        if self.user.cookie:
+            session.cookie_jar.update_cookies(self.user.cookie)
         session._default_proxy = self.user.proxy
         self.session = session
 
@@ -42,8 +47,9 @@ class Project:
 
 
     async def generate_random_wallet(self) -> str:
-        private_key = Web3.keccak(os.urandom(32))
-        wallet = Web3.eth.account.privateKeyToAccount(private_key)
+        w3 = Web3()
+        private_key = w3.keccak(os.urandom(32))
+        wallet = w3.eth.account.from_key(private_key)
         return wallet.address
 
 
@@ -72,20 +78,68 @@ class Project:
         }
 
         signed_transaction = self.w3.eth.account.sign_transaction(transaction, self.user.private_key)
-        await self.w3.eth.send_raw_transaction(signed_transaction.raw_transaction)
+
+        asyncio.create_task(self.w3.eth.send_raw_transaction(signed_transaction.raw_transaction))
 
 # TODO: подписать транзу и получить сигнатуру
-    async def sign_received_transaction(self, transaction) -> dict:
-        signed_transaction = {}
+    async def sign_received_transaction(self, transaction) -> SignedTransaction:
+        transaction = {
+            "nonce": transaction["nonce"],
+            "gasPrice": int(transaction["gasPrice"]["hex"], 16),
+            "gas": int(transaction["gasLimit"]["hex"], 16),
+            "to": transaction["to"],
+            "value": int(transaction["value"]["hex"], 16),
+            "data": transaction["data"],
+            "chainId": transaction["chainId"]
+        }
+        signed_transaction = self.w3.eth.account.sign_transaction(transaction, self.user.private_key)
         return signed_transaction
+
+    # TODO: сделать сообщение с сигнатурой
+    async def create_message_with_signed_transaction(self, signed_transaction: SignedTransaction) -> dict:
+        tx_hash = signed_transaction.hash.hex()
+        timestamp = str(int(time.time() * 1000))
+        verification_string = signed_transaction.rawTransaction.hex()[2:66]
+
+        eip712_message = {
+            "types": {
+                "AuthorizePendingTransactionToken": [
+                    {"name": "txHash", "type": "string"},
+                    {"name": "message", "type": "string"},
+                    {"name": "signedAt", "type": "string"},
+                    {"name": "verificationString", "type": "string"},
+                ],
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"},
+                    {"name": "chainId", "type": "uint256"},
+                ]
+            },
+            "domain": {
+                "name": "Harpie Login",
+                "version": "1",
+                "chainId": hex(8453)
+            },
+            "primaryType": "AuthorizePendingTransactionToken",
+            "message": {
+                "txHash": tx_hash,
+                "message": "Click 'sign' to approve this transaction and send it out to the blockchain.\n\nThis signature will not trigger a blockchain transaction or cost any gas fees. Harpie will never ask for your seed phrase or private key. Your session will be valid for 5 minutes.",
+                "signedAt": timestamp,
+                "verificationString": verification_string
+            }
+        }
+
+        encoded_message = encode_defunct(text=json.dumps(eip712_message))
+        signature = self.w3.eth.account.sign_message(encoded_message, private_key=self.user.private_key).signature.hex()
+
+        return signature
 
 
     async def receive_websocket_transaction(self, ws: aiohttp.ClientWebSocketResponse = None):
         if not ws:
-            ws = self.session.ws_connect(f'wss://rpc-base.harpie.io/{self.user.wallet}')
-        transaction = await ws.receive_json()
+            ws = await self.session.ws_connect(f'wss://rpc-base.harpie.io/{self.user.wallet}')
+        data = await ws.receive_json()
         try:
-            data = json.loads(transaction)
             if "action" in data and data["action"] == "pendingConfirmation":
                 transaction = data['data']['transaction']
                 return ws, transaction
@@ -100,11 +154,6 @@ class Project:
     async def send_websocket_message(self, ws: aiohttp.ClientWebSocketResponse, message: json):
         await ws.send_json(message)
         await ws.close()
-
-# TODO: сделать сообщение с сигнатурой
-    async def create_message_with_signed_transaction(self, signed_transaction: dict) -> dict:
-        message = {}
-        return message
 
 
     async def scan_wallet_request(self) -> str:
